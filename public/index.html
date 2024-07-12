@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Voice Command Test</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands"></script>
+  <style>
+    #commands {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <button id="start-recognition">Start Voice Recognition</button>
+  <button id="stop-recognition">Stop Voice Recognition</button>
+  <ul id="notes-list"></ul>
+  <div id="commands"></div>
+
+  <script>
+    const recognizer = speechCommands.create('BROWSER_FFT');
+    let isListening = false;
+
+    document.getElementById('start-recognition').addEventListener('click', async () => {
+      if (!isListening) {
+        await recognizer.ensureModelLoaded();
+        recognizer.listen(async result => {
+          const words = recognizer.wordLabels();
+          const word = words[result.scores.indexOf(Math.max(...result.scores))];
+          displayCommand(word);
+          handleVoiceCommand(word);
+        }, { probabilityThreshold: 0.75 });
+        isListening = true;
+      }
+    });
+
+    document.getElementById('stop-recognition').addEventListener('click', () => {
+      if (isListening) {
+        recognizer.stopListening();
+        isListening = false;
+      }
+    });
+
+    function displayCommand(command) {
+      const commandsDiv = document.getElementById('commands');
+      const newCommand = document.createElement('p');
+      newCommand.textContent = `Recognized command: ${command}`;
+      commandsDiv.appendChild(newCommand);
+    }
+
+    async function handleVoiceCommand(command) {
+      try {
+        switch (command) {
+          case 'create':
+            const content = prompt('Enter note content:');
+            if (content) {
+              await fetch('http://localhost:3000/api/notes', {
+                method: 'POST',
+                body: JSON.stringify({ content }),
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+            break;
+          case 'read':
+            const response = await fetch('http://localhost:3000/api/notes');
+            const notes = await response.json();
+            document.getElementById('notes-list').innerHTML = notes.map(note => `<li>${note.content}</li>`).join('');
+            break;
+          case 'update':
+            const id = prompt('Enter note ID:');
+            const newContent = prompt('Enter new content:');
+            if (id && newContent) {
+              await fetch(`http://localhost:3000/api/notes/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ content: newContent }),
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+            break;
+          case 'delete':
+            const deleteId = prompt('Enter note ID:');
+            if (deleteId) {
+              await fetch(`http://localhost:3000/api/notes/${deleteId}`, { method: 'DELETE' });
+            }
+            break;
+          default:
+            console.log(`Unknown command: ${command}`);
+        }
+      } catch (error) {
+        console.error('Error handling voice command:', error);
+      }
+    }
+  </script>
+</body>
+</html>
